@@ -6,4 +6,5 @@ PluginInfo = {
   Author = "Bayside Church",
   Description = "Control of Samsung televisions — consumer Tizen sets via IP Control (JSON-RPC) and the Tizen websocket remote, plus commercial panels via MDC.",
   Manufacturer = "Samsung",
+  IsManaged = true, -- joins the Core Inventory so Status transitions raise Event Log alerts
 }

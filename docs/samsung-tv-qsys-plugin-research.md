@@ -198,7 +198,7 @@ For consumer TVs the plugin runs **two transports at once**: RPC 1516 for everyt
 
 Achievable: power on from fully off, power off, reboot, art mode, volume up/down, mute, input selection (via the cycle-and-verify loop), full remote navigation, app launch, browser URL, channel, transport keys, and readback of power/input/volume/mute/picture mode/sound mode/picture size.
 
-Not achievable on consumer/Frame sets: absolute volume set (`directVolumeControl` → `-32601`), direct input selection (`inputSourceControl` → `-32601`), arbitrary picture geometry (MDC-only), any guarantee across firmware updates. Both missing methods exist on Wall PRO / commercial panels, so the same plugin should use them when the device type says commercial.
+Not achievable on consumer/Frame sets: arbitrary picture geometry (MDC-only), any guarantee across firmware updates. Absolute volume and direct input selection **are** achievable on current Frame firmware (verified §7.9; the methods only vanish while the set is in standby) and on Wall PRO / commercial panels; the plugin probes for them with the TV on and falls back to the websocket cycle where they are absent.
 
 ---
 
@@ -440,8 +440,8 @@ Across 20+ TVs this is the difference between noticing a dark room on Sunday mor
 
 | Want | Reality |
 |---|---|
-| Absolute volume set on consumer | ✘ `directVolumeControl` → `-32601` on Frames. Up/down only. Volume *reads* fine. |
-| Direct input select on consumer | ✘ `inputSourceControl` → `-32601`. Cycle-and-verify is the only route. |
+| Absolute volume set on consumer | ✔ **Works on the 2025 Frame while the TV is on** — `directVolumeControl {volume:n}` sets and `getTVStates` confirms. Returns `-32601` **only while the TV is in standby**, which is what earlier tests saw (§7.9). Probe with the TV on. |
+| Direct input select on consumer | ✔ **Works on the 2025 Frame while the TV is on** — `inputSourceControl {inputSource:"HDMI1"}` switches and `getTVStates` confirms; `TV` works too. `-32601` **only in standby** (§7.9). Cycle-and-verify over the websocket is the fallback for sets where the method is genuinely absent. |
 | Power off via websocket | ✘ `KEY_POWER` toggles Art Mode ↔ on; press-and-hold is treated as a click. |
 | Any state read via websocket | ✘ None. RPC or nothing. |
 | `/api/v2/ PowerState` as truth | ✘ Reports `on` while in Art Mode. Discovery only. |
@@ -450,7 +450,7 @@ Across 20+ TVs this is the difference between noticing a dark room on Sunday mor
 | Cross-subnet pairing | ✘ Approval prompts never render for off-subnet requests — the socket connects and hangs silently. Network design requirement. |
 | Pairing while in Art Mode | ✘ Prompt doesn't draw; the call times out. |
 
-`inputSourceControl` and `directVolumeControl` *do* exist on Wall PRO and commercial panels sharing the protocol — so the same plugin should use them when the probe finds them.
+`inputSourceControl` and `directVolumeControl` also exist on Wall PRO and commercial panels sharing the protocol. **Capability probing must happen with the TV on** (or be repeated on the first off→on transition) — a probe in standby under-reports.
 
 ### 7.8 Build order
 
@@ -476,8 +476,16 @@ Run from a Control Script in **Designer 10.4.1 emulation** on a PC that was *not
 | Bogus token | Returns `{"code":-32700,"message":"Parse error"}` — a **flat** object, not JSON-RPC-wrapped, and not the `-32010` the reference doc lists. The error mapper must route both to *re-pair*. |
 | Response `id` | Comes back as the string `"1"` even when sent as the number `1`. Compare loosely. |
 | `/api/v2/` `firmwareVersion` | `Unknown` on this set — don't rely on it for the capability probe. |
+| `inputSourceControl` set | ✔ `{inputSource:"HDMI1"}` → TV switches, `getTVStates.inputSource` reads `HDMI1`. Also `TV` and back to `HDMI2`. Response echoes the value. |
+| `directVolumeControl` set | ✔ `{volume:3}` → `getTVStates.volume` reads 3; `{volume:0}` restores. |
+| Same two methods with TV in standby | `-32601 Method not found`. **Availability depends on power state.** After `powerControl:powerOn` reports on, the methods appear within a few seconds. |
+| Power-on sequence | ✔ Off → `powerOn` → on reported after ~4 s → re-probe → `inputSourceControl HDMI2` → verified. Frame came up on input `TV` before steering, as §4.1 predicts. |
+| Power off | ✔ `powerOff` → `powerControl` get reports `powerOff` within ~4 s; RPC keeps answering in standby, so polling continues. |
+| Bare envelope | Once, immediately after a set: `{"jsonrpc":"2.0","id":"1"}` with neither `result` nor `error`. Treat as transient. |
 
-Consequences for the design: the RPC transport can be built exactly as specified in §4 with plain `HttpClient` calls. The websocket transport keeps its "pair from the TV subnet" prerequisite. Both transports should be treated as verified on the Windows emulator runtime and re-confirmed once on a physical Core before commissioning.
+Consequences for the design: the RPC transport can be built exactly as specified in §4 with plain `HttpClient` calls, and on current firmware **RPC alone covers power, input, and volume** — the three things the originating deployment needs. The websocket is only required for sets where `inputSourceControl` is genuinely absent, and it keeps its "pair from the TV subnet" prerequisite. Both transports should be treated as verified on the Windows emulator runtime and re-confirmed once on a physical Core before commissioning.
+
+Dev loop used for all of the above: Designer emulating a design with one Control Script (*Script Access = All*), driven over QRC by `tools/qrc_push_run.py`; `tools/harness_runtime.lua` runs the plugin's real `src/` modules with faked `Properties`/`Controls` against the TV; `tools/test_rpc.lua` unit-tests the RPC module the same way.
 
 ## Sources
 

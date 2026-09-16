@@ -1,19 +1,18 @@
--- Basic Framework Plugin
--- by QSC
--- October 2020
--- Updated April 2026
+-- Samsung TV Control plugin for Q-SYS Designer.
+-- Built on QSC's Basic Framework Plugin (October 2020, updated April 2026).
+-- Source modules are combined by PLUGCC via the #include directives below.
 
 -- Information block for the plugin
 --[[ #include "info.lua" ]]
 
 -- Define the color of the plugin object in the design
 function GetColor(props)
-  return { 102, 102, 102 }
+  return { 20, 40, 160 }
 end
 
 -- The name that will initially display when dragged into a design
 function GetPrettyName(props)
-  return "My First Plugin, version " .. PluginInfo.Version
+  return "Samsung TV v" .. PluginInfo.Version
 end
 
 -- Define User configurable Properties of the plugin
