@@ -12,6 +12,7 @@
     readonly   connect, probe, poll; dump state. Changes nothing on the TV.
     audio      readonly + volume up/down + mute on/off round-trip.
     steer      readonly + attempt to steer input to STEER_TARGET (needs websocket).
+    artmode    readonly + Art Mode on, then off (Frame only); verifies the input re-issue.
     poweroff   readonly + Power Off (TV goes dark — be sure).
     poweron    readonly + Power On sequence (+ art mode off + steer per property).
 ]]
@@ -126,6 +127,11 @@ Timer.CallAfter(function()
     Controls.InputSelect.String = STEER_TARGET
     Controls.InputSelect.EventHandler(Controls.InputSelect)
     Timer.CallAfter(finish, 25)
+
+  elseif SCENARIO == "artmode" then
+    setToggle("ArtMode", true)
+    Timer.CallAfter(function() dump("IN ART MODE"); setToggle("ArtMode", false) end, 8)
+    Timer.CallAfter(finish, 20)
 
   elseif SCENARIO == "poweroff" then
     press("PowerOff")

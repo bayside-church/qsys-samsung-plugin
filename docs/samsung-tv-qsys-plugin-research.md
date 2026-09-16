@@ -193,6 +193,7 @@ For consumer TVs the plugin runs **two transports at once**: RPC 1516 for everyt
 - After `powerOn`, a Frame comes up on input **TV** (Samsung TV Plus), not the last HDMI — the plugin must always steer input afterwards rather than assuming restoration.
 - Art Mode is not "off": the panel only darkens when the motion sensor sees nobody. For genuinely dark overnight, send `powerOff`.
 - Leaving Art Mode via `KEY_POWER` lands on the last non-HDMI source if that was used most recently.
+- **Leaving Art Mode via `artModeControl:artModeOff` lands on the Smart Hub while `getTVStates.inputSource` still reports the previous input** (verified 2026-09-16 with a person watching the screen). The state read cannot be trusted right after an art-mode exit; always re-issue `inputSourceControl` afterwards, even when the TV claims it is already on the wanted input. The plugin does this on every art-mode exit it initiates.
 
 ### 4.2 "Full control" — honest capability matrix
 
@@ -449,6 +450,8 @@ Across 20+ TVs this is the difference between noticing a dark room on Sunday mor
 | Picture geometry on consumer | ✘ MDC-only (commercial panels). |
 | Cross-subnet pairing | ✘ Approval prompts never render for off-subnet requests — the socket connects and hangs silently. Network design requirement. |
 | Pairing while in Art Mode | ✘ Prompt doesn't draw; the call times out. |
+| More than one RPC controller per TV | ✘ **One RPC token per TV.** A new `createAccessToken` from any client revokes the previous token (observed: a second pairing from the same subnet invalidated a token that had been working for 40 minutes; the old token then got `-32700` on every call). Pair from the Core only — never test-pair from a laptop first and expect the Core's token to survive. |
+| `getTVStates.inputSource` right after leaving Art Mode | ✘ Reports the old input while the screen shows the Smart Hub. Re-issue the input (§4.1). |
 
 `inputSourceControl` and `directVolumeControl` also exist on Wall PRO and commercial panels sharing the protocol. **Capability probing must happen with the TV on** (or be repeated on the first off→on transition) — a probe in standby under-reports.
 
@@ -481,6 +484,8 @@ Run from a Control Script in **Designer 10.4.1 emulation** on a PC that was *not
 | Same two methods with TV in standby | `-32601 Method not found`. **Availability depends on power state.** After `powerControl:powerOn` reports on, the methods appear within a few seconds. |
 | Power-on sequence | ✔ Off → `powerOn` → on reported after ~4 s → re-probe → `inputSourceControl HDMI2` → verified. Frame came up on input `TV` before steering, as §4.1 predicts. |
 | Power off | ✔ `powerOff` → `powerControl` get reports `powerOff` within ~4 s; RPC keeps answering in standby, so polling continues. |
+| Art-mode exit | `artModeOff` → screen shows Smart Hub, `getTVStates` says `HDMI2`; a following `inputSourceControl HDMI2` restores the picture. |
+| Token lifetime | A token worked for ~40 min across many calls and a power cycle, then was revoked the moment another client called `createAccessToken`. Tokens are not time-limited; they are single-holder. |
 | Bare envelope | Once, immediately after a set: `{"jsonrpc":"2.0","id":"1"}` with neither `result` nor `error`. Treat as transient. |
 
 Consequences for the design: the RPC transport can be built exactly as specified in §4 with plain `HttpClient` calls, and on current firmware **RPC alone covers power, input, and volume** — the three things the originating deployment needs. The websocket is only required for sets where `inputSourceControl` is genuinely absent, and it keeps its "pair from the TV subnet" prerequisite. Both transports should be treated as verified on the Windows emulator runtime and re-confirmed once on a physical Core before commissioning.

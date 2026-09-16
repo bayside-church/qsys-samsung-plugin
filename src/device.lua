@@ -392,10 +392,20 @@ function Device.setVolume(v)
   end
   simple("directVolumeControl", { volume = math.floor(tonumber(v) or 0) }, function() Device.poll() end)
 end
+-- Leaving Art Mode lands the Frame on the Smart Hub while getTVStates keeps
+-- reporting the previous input (verified 2026-09-16). So an art-mode exit is
+-- always followed by re-issuing an input: `after` if the caller supplies one
+-- (the power-on sequence does), otherwise the input the TV claims to be on.
 function Device.setArtMode(on, after)
   simple("artModeControl", { artMode = on and "artModeOn" or "artModeOff" }, function()
     applyArtMode(on and "artModeOn" or "artModeOff")
-    if after then after() end
+    if on then
+      if after then after() end
+    elseif after then
+      Timer.CallAfter(after, 1.5)
+    elseif Device.input and Device.input ~= "" then
+      Timer.CallAfter(function() Device.steer(Device.input) end, 1.5)
+    end
   end)
 end
 
@@ -435,7 +445,8 @@ function Device.powerOn()
       if not ok then return Device.setError("TV did not report on within 40 s") end
       local function steer()
         local target = Properties["Input After Power-On"].Value
-        if target and target ~= "None" then Device.steer(target) end
+        if not target or target == "None" then target = Device.input end -- after art mode, re-issue even the current one
+        if target and target ~= "" then Device.steer(target) end
       end
       local function afterProbe()
       if Device.isFrame then
