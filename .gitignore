@@ -1,0 +1,21 @@
+# Compiled plugin output — built artifacts, not source
+dist/*.qplug
+
+# Q-SYS Designer
+*.qsys.bak
+*.qsys.lock
+Backup/
+
+# Site-specific configuration — tokens, IPs, MACs. Never commit.
+**/site-local/
+*.token
+tokens.txt
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# Compiled plugin — PLUGCC writes <foldername>.qplug to the repo root
+/*.qplug

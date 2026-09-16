@@ -1,0 +1,57 @@
+#!/bin/sh
+# Blocks commits that would leak deployment-specific information into this
+# public repository. Runs against staged content only.
+#
+# Bypass (only when you are certain): git commit --no-verify
+
+RED='\033[0;31m'; YEL='\033[0;33m'; NC='\033[0m'
+fail=0; warned=0
+
+# HARD BLOCK — network and internal-system identifiers. These have no business
+# in a public repo under any circumstances.
+BLOCK='(10\.82\.[0-9]+\.[0-9]+)|(([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})|(mss-[A-Za-z0-9]+)|(RockWall)|(bayside-rock)|(claude\.ai/(code/)?artifact)|(C:\\Tools\\)'
+
+# WARN ONLY — the organization name. Legitimate in attribution (LICENSE, the
+# plugin's Author field, the repo owner); a leak when it appears in operational
+# context. Human judgement required, so this warns rather than blocks.
+WARN='[Bb]ayside'
+
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  # This hook necessarily contains the patterns it searches for.
+  case "$f" in .githooks/*) continue;; esac
+
+  content=$(git show ":$f" 2>/dev/null) || continue
+
+  hits=$(printf '%s' "$content" | grep -nE "$BLOCK")
+  if [ -n "$hits" ]; then
+    [ $fail -eq 0 ] && printf "${RED}COMMIT BLOCKED — internal information detected${NC}\n\n"
+    fail=1
+    printf "${YEL}%s${NC}\n" "$f"
+    printf '%s\n\n' "$hits" | sed 's/^/    /'
+  fi
+
+  soft=$(printf '%s' "$content" | grep -nE "$WARN")
+  if [ -n "$soft" ]; then
+    warned=1
+    printf "${YEL}note:${NC} organization name in %s\n" "$f"
+    printf '%s\n' "$soft" | sed 's/^/    /'
+  fi
+done
+
+if [ $fail -eq 1 ]; then
+  cat <<'MSG'
+
+This repository is public. The matched content identifies the deployment's
+network or internal systems.
+
+Fix by one of:
+  - genericize the text (see docs/samsung-tv-qsys-plugin-research.md for style)
+  - move it to docs/site-local/   (gitignored)
+  - false positive: git commit --no-verify
+
+MSG
+  exit 1
+fi
+
+[ $warned -eq 1 ] && printf "\n${YEL}Above is attribution context — allowed. Verify it is not operational detail.${NC}\n\n"
+exit 0
