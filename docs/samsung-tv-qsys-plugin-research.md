@@ -205,7 +205,7 @@ Not achievable on consumer/Frame sets: absolute volume set (`directVolumeControl
 ## 5. Build plan
 
 1. **Port the proven reference implementation first.** A working PowerShell RPC client, websocket key sender, and state-checked morning/evening routine already exist and run on a schedule. That is the reference behavior — translate it to Lua rather than re-deriving it.
-2. **Prove the one Q-SYS-specific unknown (half a day).** In a plain Control Script on a real Core: does `HttpClient` POST to `https://<ip>:1516/` succeed against the TV's **self-signed cert**? This is the make-or-break question — the whole primary transport depends on it. If Q-SYS won't skip verification, fall back to `TcpSocket` + hand-rolled HTTP, or to SmartThings. Same question applies to `WebSocket` on 8002.
+2. ~~**Prove the one Q-SYS-specific unknown.**~~ **Resolved 2026-09-16** — see §7.9. Q-SYS `HttpClient` and `WebSocket` both accept the TV's self-signed cert with no configuration; `createAccessToken` and authenticated `getTVStates` / `powerControl` / `artModeControl` round-trips all succeed from a Control Script.
 3. Scaffold from Basic Plugin Framework; use the community Samsung MDC plugin (MIT) as a structural reference.
 4. Build order: RPC transport → websocket keys → input cycle-and-verify loop → MDC → SmartThings/WoL.
 5. UI: control layout + graphics, a ready-made example UCI, and a Debug Print property (`None/Tx/Rx/Tx&Rx/Function Calls`) — house style for Q-SYS plugins.
@@ -215,7 +215,7 @@ Not achievable on consumer/Frame sets: absolute volume set (`directVolumeControl
 **Effort estimate**: RPC + websocket consumer support ≈ 1–2 weeks (down from the earlier 2–3, since the protocol work is already done and field-verified). MDC ≈ 3–5 days. SmartThings ≈ 3–5 days.
 
 **Top risks**
-1. Q-SYS `HttpClient` / `WebSocket` TLS behavior against a self-signed cert — unresolved, and everything hangs on it. Test first.
+1. ~~Q-SYS `HttpClient` / `WebSocket` TLS behavior against a self-signed cert~~ — **resolved, works** (§7.9).
 2. **Cross-subnet pairing is impossible.** The Core must be on the TV's subnet at least for pairing. This is a network design requirement to raise with the customer at scoping time, not a code problem.
 3. Pairing requires physical presence at each TV, once per device. Plan commissioning around it.
 4. Unofficial, empirically enumerated protocol — no stability guarantee across firmware.
@@ -461,6 +461,23 @@ The spec above is the destination. Ship it in slices so a working building beats
 - **v3 — breadth across models.** MDC/commercial tier, Frame art mode, app launch, picture controls, SmartThings fallback, WoL for legacy sets.
 
 ---
+
+### 7.9 Q-SYS transport verification (Phase 0, 2026-09-16)
+
+Run from a Control Script in **Designer 10.4.1 emulation** on a PC that was *not* on the TV's subnet (routed, two hops), against a 2025 50" Frame. The probe script is `tools/p0_transport_probe.lua`; results were read back over QRC (`Control_Script` with *Script Access = All* exposes `code`, `reload` and `log.history`, so a script can be pushed, run, and its output collected without touching the Designer GUI).
+
+| Question | Result |
+|---|---|
+| `HttpClient.Upload` POST to `https://<tv>:1516/` against the self-signed cert | ✔ Works with no cert options at all. There is no verify/insecure flag in the API and none is needed. |
+| `WebSocket:Connect("wss", …, 8002)` against the self-signed cert | ✔ TLS handshake completes; `Connected` fires and frames arrive. |
+| `createAccessToken` from off-subnet | ✔ **Token issued immediately** (HTTP 200, `result.AccessToken`), and the TV drew its approval prompt shortly *after* — authenticated reads already succeeded before anyone pressed Allow. This contradicts the earlier PowerShell finding that off-subnet RPC pairing hangs silently; treat that as firmware/state dependent, not a rule. |
+| Websocket pairing from off-subnet | ✘ Socket opens, TV immediately sends `{"event":"ms.channel.timeOut"}` and closes. The cross-subnet rule holds for 8002. |
+| Token validity | ✔ `getTVStates`, `powerControl` (get) and `artModeControl` (get) all return real state with the new token. |
+| Bogus token | Returns `{"code":-32700,"message":"Parse error"}` — a **flat** object, not JSON-RPC-wrapped, and not the `-32010` the reference doc lists. The error mapper must route both to *re-pair*. |
+| Response `id` | Comes back as the string `"1"` even when sent as the number `1`. Compare loosely. |
+| `/api/v2/` `firmwareVersion` | `Unknown` on this set — don't rely on it for the capability probe. |
+
+Consequences for the design: the RPC transport can be built exactly as specified in §4 with plain `HttpClient` calls. The websocket transport keeps its "pair from the TV subnet" prerequisite. Both transports should be treated as verified on the Windows emulator runtime and re-confirmed once on a physical Core before commissioning.
 
 ## Sources
 
