@@ -61,50 +61,51 @@ if CurrentPage == "Control" then
   -- Power ---------------------------------------------------------------------
   local gx, gy, gw = 5, 5, 160
   group("Power", gx, gy, gw, 118)
-  button("PowerOn",     "Power~On",     "On",     gx + M,      gy + 22, 68, ROW, "Trigger", COLOR_GO)
-  button("PowerOff",    "Power~Off",    "Off",    gx + M + 76, gy + 22, 68, ROW, "Trigger", COLOR_STOP)
-  button("PowerToggle", "Power~Toggle", "Toggle", gx + M,      gy + 52, 144, ROW)
-  led("PowerState", "Power~State", gx + M, gy + 86)
-  readonly("PowerStateText", "Power~State Text", gx + M + 22, gy + 84, 122, 20)
+  button("PowerOn",     "Power On",     "On",     gx + M,      gy + 22, 68, ROW, "Trigger", COLOR_GO)
+  button("PowerOff",    "Power Off",    "Off",    gx + M + 76, gy + 22, 68, ROW, "Trigger", COLOR_STOP)
+  button("PowerToggle", "Power Toggle", "Toggle", gx + M,      gy + 52, 144, ROW)
+  led("PowerState", "Power State", gx + M, gy + 86)
+  readonly("PowerStateText", "Power State Text", gx + M + 22, gy + 84, 122, 20)
 
   -- Input ---------------------------------------------------------------------
   gx = 175
   group("Input", gx, gy, gw, 118)
   layout["InputSelect"] = {
-    PrettyName = "Input~Select", Style = "ComboBox", Position = { gx + M, gy + 22 },
+    PrettyName = "Input Select", Style = "ComboBox", Position = { gx + M, gy + 22 },
     Size = { 144, ROW }, FontSize = FONT, HTextAlign = "Left",
   }
   label("Current:", gx + M, gy + 52, 50)
-  readonly("InputState", "Input~State", gx + M + 52, gy + 52, 92, 20)
-  button("HDMICycle", "Input~Cycle HDMI", "Cycle HDMI", gx + M, gy + 84, 144, ROW)
+  readonly("InputState", "Input State", gx + M + 52, gy + 52, 92, 20)
+  button("HDMICycle", "Cycle HDMI", "Cycle HDMI", gx + M, gy + 84, 144, ROW)
 
   -- Audio ---------------------------------------------------------------------
   gx, gy = 5, 130
   group("Audio", gx, gy, gw, 96)
-  button("VolumeDown", "Audio~Volume Down", "Vol −", gx + M,      gy + 22, 44, ROW)
-  button("VolumeUp",   "Audio~Volume Up",   "Vol +", gx + M + 50, gy + 22, 44, ROW)
-  button("Mute",       "Audio~Mute",        "Mute",  gx + M + 100, gy + 22, 44, ROW, "Toggle", COLOR_WARN)
+  button("VolumeDown", "Volume Down", "Vol −", gx + M,      gy + 22, 44, ROW)
+  button("VolumeUp",   "Volume Up",   "Vol +", gx + M + 50, gy + 22, 44, ROW)
+  button("Mute",       "Mute",        "Mute",  gx + M + 100, gy + 22, 44, ROW, "Toggle", COLOR_WARN)
+  label("Volume:", gx + M, gy + 56, 50)
   layout["Volume"] = {
-    PrettyName = "Audio~Volume", Style = "Knob", ControlUnit = "Integer", Position = { gx + M, gy + 52 },
-    Size = { 144, 36 }, FontSize = FONT, ShowTextbox = true,
+    PrettyName = "Volume", Style = "Text", Position = { gx + M + 52, gy + 56 },
+    Size = { 92, 22 }, FontSize = FONT, HTextAlign = "Center",
   }
 
   -- The Frame -----------------------------------------------------------------
   gx = 175
   group("The Frame", gx, gy, gw, 96)
-  button("ArtMode", "Frame~Art Mode", "Art Mode", gx + M, gy + 22, 144, ROW, "Toggle", COLOR_WARN)
+  button("ArtMode", "Art Mode", "Art Mode", gx + M, gy + 22, 144, ROW, "Toggle", COLOR_WARN)
   label("Disabled unless the probe finds artModeControl.", gx + M, gy + 52, 144, 36)
 
   -- Status --------------------------------------------------------------------
   gx, gy = 5, 234
   group("Status", gx, gy, W - 10, 78)
   layout["Status"] = {
-    PrettyName = "Status~Status", Style = "Indicator", IndicatorType = "Status",
+    PrettyName = "Status", Style = "Indicator", IndicatorType = "Status",
     Position = { gx + M, gy + 22 }, Size = { W - 10 - 2 * M, ROW }, FontSize = FONT,
   }
-  led("Online", "Status~Online", gx + M, gy + 54)
-  readonly("ConnectionState", "Status~Connection State", gx + M + 22, gy + 52, 120, 20)
-  readonly("Model", "Status~Model", gx + M + 150, gy + 52, W - 10 - 2 * M - 150, 20)
+  led("Online", "Online", gx + M, gy + 54)
+  readonly("ConnectionState", "Connection State", gx + M + 22, gy + 52, 120, 20)
+  readonly("Model", "Model", gx + M + 150, gy + 52, W - 10 - 2 * M - 150, 20)
 
 elseif CurrentPage == "Setup" then
   -- Pairing -------------------------------------------------------------------
@@ -115,15 +116,17 @@ elseif CurrentPage == "Setup" then
   button("PairWS",      "Pairing~Pair WebSocket", "Pair (WebSocket)", gx + M + 106, gy + 22, 110, ROW, "Momentary", COLOR_WARN)
   button("ClearTokens", "Pairing~Clear Tokens",   "Clear Tokens",     gx + M + 222, gy + 22, 94,  ROW, "Momentary", COLOR_STOP)
   label("RPC token:", gx + M, gy + 54, 70)
-  readonly("RPCToken", "Pairing~RPC Token", gx + M + 72, gy + 54, gw - 2 * M - 72, 20)
+  layout["RPCToken"] = { PrettyName = "Pairing~RPC Token", Style = "Text", TextBoxStyle = "Normal", IsReadOnly = true,
+    Position = { gx + M + 72, gy + 54 }, Size = { gw - 2 * M - 72, 20 }, FontSize = FONT, HTextAlign = "Left" }
   label("WS token:", gx + M, gy + 80, 70)
-  readonly("WSToken", "Pairing~WebSocket Token", gx + M + 72, gy + 80, gw - 2 * M - 72, 20)
+  layout["WSToken"] = { PrettyName = "Pairing~WebSocket Token", Style = "Text", TextBoxStyle = "Normal", IsReadOnly = true,
+    Position = { gx + M + 72, gy + 80 }, Size = { gw - 2 * M - 72, 20 }, FontSize = FONT, HTextAlign = "Left" }
 
   -- Device --------------------------------------------------------------------
   gy = 125
   group("Device", gx, gy, gw, 96)
   label("Model:", gx + M, gy + 22, 70)
-  readonly("Model", "Device~Model", gx + M + 72, gy + 22, gw - 2 * M - 72, 20)
+  readonly("Model", "Model", gx + M + 72, gy + 22, gw - 2 * M - 72, 20)
   label("MAC:", gx + M, gy + 46, 70)
   readonly("MAC", "Device~MAC", gx + M + 72, gy + 46, gw - 2 * M - 72, 20)
   label("Capabilities:", gx + M, gy + 70, 70)

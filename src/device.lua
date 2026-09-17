@@ -356,7 +356,12 @@ function Device.onWsEvent(kind, a, b)
     refreshStatus()
   elseif kind == "pairing_refused" then
     wsDegraded = true
-    Device.setError("Websocket pairing refused — pair from the TV's own subnet (ms.channel.timeOut)")
+    -- Only an error if this set actually needs the websocket for input switching.
+    if Device.caps.inputSourceControl == false then
+      Device.setError("Websocket pairing refused — pair from the TV's own subnet (ms.channel.timeOut)")
+    else
+      Log.fn("websocket pairing refused (not needed: inputSourceControl available)")
+    end
     refreshStatus()
   elseif kind == "unauthorized" then
     wsDegraded = true
