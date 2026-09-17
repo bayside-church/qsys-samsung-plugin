@@ -599,7 +599,10 @@ function Device.steer(target, cb)
   if Device.caps.inputSourceControl ~= false then -- true or unknown: try the direct path
     Rpc.call("inputSourceControl", { inputSource = target }, function(resp)
       if resp.ok then
-        Timer.CallAfter(function()
+        -- Verify; some sets take a few seconds. Check at 2 s and again at 5 s.
+        local checks = 0
+        local function verify()
+          checks = checks + 1
           Rpc.call("getTVStates", nil, function(r2)
             if r2.ok then Device.applyStates(r2.result) end
             if r2.ok and r2.result.inputSource == target then
@@ -608,10 +611,21 @@ function Device.steer(target, cb)
               Controls.InputSelect.String = target
               return cb(true)
             end
-            Log.fn("inputSourceControl did not take; falling back to key cycling")
-            Device.steerByCycling(target, cb)
+            if checks < 2 then return Timer.CallAfter(verify, 3) end
+            -- The TV accepted the call but stayed put. Samsung sets refuse to
+            -- select an input with nothing connected to it (verified on an
+            -- M70H). Only try key cycling if the websocket is actually there.
+            if Ws.state == "connected" then
+              Log.fn("inputSourceControl did not take; falling back to key cycling")
+              return Device.steerByCycling(target, cb)
+            end
+            Device.steering = false
+            if Device.input then Controls.InputSelect.String = Device.input end
+            Device.setError(string.format("TV declined to switch to %s (still on %s) — is a device connected to that input?", target, tostring(Device.input)))
+            cb(false)
           end)
-        end, 2)
+        end
+        Timer.CallAfter(verify, 2)
       elseif Rpc.isUnauthorized(resp, resp.hadToken) then
         Device.steering = false
         Device.unauthorized()
