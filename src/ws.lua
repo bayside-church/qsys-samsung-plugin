@@ -98,9 +98,16 @@ function Ws.connect()
       setState("connected")
       Ws.flush()
     elseif msg.event == "ms.channel.timeOut" then
-      -- TV won't pair from here; don't hammer it — wait for Pair (WebSocket).
-      Ws.enabled = false
-      onEvent("pairing_refused", "ms.channel.timeOut")
+      if Ws.token == "" then
+        -- No token: the TV refused to pair (off-subnet, or nobody pressed Allow).
+        -- Don't hammer it with prompts — wait for Pair (WebSocket).
+        Ws.enabled = false
+        onEvent("pairing_refused", "ms.channel.timeOut")
+      else
+        -- With a token this is the TV in standby (or momentarily busy); keep
+        -- reconnecting on backoff so control resumes when it wakes.
+        onEvent("standby", "ms.channel.timeOut")
+      end
     elseif msg.event == "ms.channel.unauthorized" then
       onEvent("unauthorized", "ms.channel.unauthorized")
     end

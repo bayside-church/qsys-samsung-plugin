@@ -58,9 +58,15 @@ local function refreshStatus()
   if Device.state ~= "Connected" then return end
   local offIsCompromised = (Properties["Power Off Reports As"] or {}).Value == "Compromised"
   if Device.tier == "ws" then
-    setStatus("Compromised", wsDegraded
-      and "No IP Control on this set; websocket not paired — no control possible"
-      or  "No IP Control on this set — websocket only, no status readback")
+    local msg
+    if not wsDegraded then
+      msg = "No IP Control on this set — websocket only, no status readback"
+    elseif Ws.token == "" then
+      msg = "No IP Control on this set; websocket not paired — press Pair (WebSocket)"
+    else
+      msg = "No IP Control on this set; websocket disconnected (TV in standby?) — reconnecting"
+    end
+    setStatus("Compromised", msg)
   elseif wsDegraded and Device.caps.inputSourceControl == false then
     setStatus("Compromised", "Connected; websocket not paired — input switching unavailable")
   elseif offIsCompromised and Device.power == false then
@@ -427,6 +433,9 @@ function Device.onWsEvent(kind, a, b)
     else
       Log.fn("websocket pairing refused (not needed: inputSourceControl available)")
     end
+    refreshStatus()
+  elseif kind == "standby" then
+    wsDegraded = true
     refreshStatus()
   elseif kind == "unauthorized" then
     wsDegraded = true

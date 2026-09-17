@@ -22,13 +22,14 @@ RPC_TOKEN    = ""
 WS_TOKEN     = ""
 SCENARIO     = "readonly"
 STEER_TARGET = "HDMI2"
+FRIENDLY_NAME = "Q-SYS Dev"
 
 -- Fake design-time surface --------------------------------------------------
 Properties = {
   ["IP Address"]              = { Value = TV_IP },
   ["RPC Port"]                = { Value = 1516 },
   ["WebSocket Port"]          = { Value = 8002 },
-  ["Friendly Name"]           = { Value = "Q-SYS Dev" },
+  ["Friendly Name"]           = { Value = FRIENDLY_NAME },
   ["Poll Interval"]           = { Value = 5 },
   ["Power-On Method"]         = { Value = "RPC" },
   ["MAC Address"]             = { Value = "" },
