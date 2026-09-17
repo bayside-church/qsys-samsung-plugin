@@ -2,7 +2,7 @@
 
 A Q-SYS Designer plugin for controlling Samsung televisions, including **consumer Tizen sets** that the existing MDC plugin cannot reach.
 
-> **Status: v0.1 — "the building works".** Power on/off, input selection, volume and mute with live state feedback, verified on a 2025 Frame and a 2026 M70H from Designer emulation. Not yet run on a physical Core or through a week of unattended operation; see [Roadmap](#roadmap). Full technical background in [`docs/samsung-tv-qsys-plugin-research.md`](docs/samsung-tv-qsys-plugin-research.md).
+> **Status: v0.1 — first usable release.** Power on/off, input selection, volume and mute with live state feedback, verified on a 2025 Frame and a 2026 M70H from Designer emulation. Not yet run on a physical Core or through a week of unattended operation; see [Roadmap](#roadmap). Full technical background in [`docs/samsung-tv-qsys-plugin-research.md`](docs/samsung-tv-qsys-plugin-research.md).
 
 ## Why this exists
 

@@ -6,7 +6,7 @@ this project uses Q-SYS four-part plugin versioning (`x.x.x.x`).
 
 ## [Unreleased]
 
-## [0.1.0.0] — 2026-09-17 — "the building works"
+## [0.1.0.0] — 2026-09-17 — first usable release
 
 ### Added
 - IP Control (JSON-RPC over HTTPS 1516) transport with serialized queue and
@@ -35,7 +35,7 @@ this project uses Q-SYS four-part plugin versioning (`x.x.x.x`).
   (2018, websocket-only tier up to pairing).
 
 ### Known gaps
-- Not yet run on a physical Core; no long-duration soak; MDC / SmartThings
+- Not yet run on a physical Core; no multi-day unattended run; MDC / SmartThings
   tiers not implemented.
 
 

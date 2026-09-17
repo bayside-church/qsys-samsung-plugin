@@ -459,7 +459,7 @@ Across 20+ TVs this is the difference between noticing a dark room on Sunday mor
 
 The spec above is the destination. Ship it in slices so a working building beats a complete matrix:
 
-- **v1 — the building works.** RPC transport, pairing + token persistence, power on/off with state, input steer loop, Status + Is Managed, poll. Covers all five ranked needs in §6.2.
+- **v1 — core control.** RPC transport, pairing + token persistence, power on/off with state, input steer loop, Status + Is Managed, poll. Covers all five ranked needs in §6.2.
 - **v2 — parity with convention.** WS keys, full nav pad, volume/mute, device info, control pins, UCI example, debug levels, capability probe surfaced.
 - **v3 — breadth across models.** MDC/commercial tier, Frame art mode, app launch, picture controls, SmartThings fallback, WoL for legacy sets.
 
