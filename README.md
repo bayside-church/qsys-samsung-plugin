@@ -46,6 +46,8 @@ Detected automatically: a set that refuses port 1516 but answers on 8001 is plac
 
 ## Using it
 
+<img src="docs/images/control-panel.png" alt="The plugin's control panel: Power, Input, Audio and Frame groups with live state, and a green OK - Connected status bar" width="520">
+
 1. Drop **Samsung → TV Control** from Schematic Elements → Plugins.
 2. Properties: set **IP Address** and **Input After Power-On**. Defaults are fine otherwise.
 3. Run the design. Status shows *Not paired — press Pair (RPC)*. Open the panel → **Setup** → **Pair (RPC)**, press **Allow** on the TV. Save the design — the token is stored in it.
