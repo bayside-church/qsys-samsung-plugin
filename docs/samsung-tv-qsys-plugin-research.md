@@ -217,7 +217,7 @@ Not achievable on consumer/Frame sets: arbitrary picture geometry (MDC-only), an
 
 **Top risks**
 1. ~~Q-SYS `HttpClient` / `WebSocket` TLS behavior against a self-signed cert~~ — **resolved, works** (§7.9).
-2. **Cross-subnet pairing is impossible.** The Core must be on the TV's subnet at least for pairing. This is a network design requirement to raise with the customer at scoping time, not a code problem.
+2. ~~**Cross-subnet pairing is impossible.**~~ **Revised (§7.9):** IP Control (1516) pairs *and* controls fine across subnets on 2025 firmware; only the websocket refuses off-subnet pairing. For current sets the Core needs a route to TCP 1516/8001 on each TV, not shared-subnet residency. Same-subnet is still required for 2016–2019 sets that have no IP Control (websocket-only tier). Re-verify on the first unit of each new model.
 3. Pairing requires physical presence at each TV, once per device. Plan commissioning around it.
 4. Unofficial, empirically enumerated protocol — no stability guarantee across firmware.
 5. Frames need input steering after every power-on; a naive "power on and done" macro will land users on Samsung TV Plus.
@@ -448,7 +448,7 @@ Across 20+ TVs this is the difference between noticing a dark room on Sunday mor
 | `/api/v2/ PowerState` as truth | ✘ Reports `on` while in Art Mode. Discovery only. |
 | Art selection / upload on Frame | ✘ `com.samsung.art-app` channel closed by the TV on tested firmware. |
 | Picture geometry on consumer | ✘ MDC-only (commercial panels). |
-| Cross-subnet pairing | ✘ Approval prompts never render for off-subnet requests — the socket connects and hangs silently. Network design requirement. |
+| Cross-subnet pairing | Websocket: ✘ refused (`ms.channel.timeOut`). **IP Control: ✔ works** on 2025 firmware — token issued and prompt drawn from two subnets away (§7.9). Only websocket-only sets need the controller on their subnet. |
 | Pairing while in Art Mode | ✘ Prompt doesn't draw; the call times out. |
 | More than one RPC controller per TV | ✘ **One RPC token per TV.** A new `createAccessToken` from any client revokes the previous token (observed: a second pairing from the same subnet invalidated a token that had been working for 40 minutes; the old token then got `-32700` on every call). Pair from the Core only — never test-pair from a laptop first and expect the Core's token to survive. |
 | `getTVStates.inputSource` right after leaving Art Mode | ✘ Reports the old input while the screen shows the Smart Hub. Re-issue the input (§4.1). |
