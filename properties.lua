@@ -52,6 +52,12 @@ table.insert(props, {
   Value = 6, -- bounds the KEY_HDMI cycle-and-verify loop
 })
 table.insert(props, {
+  Name = "Power Off Reports As",
+  Type = "enum",
+  Choices = { "OK", "Compromised" },
+  Value = "Compromised", -- a TV in standby shows orange in Core Manager / inventory; "OK" for sets that are meant to be off
+})
+table.insert(props, {
   Name = "Debug Print",
   Type = "enum",
   Choices = { "None", "Tx", "Rx", "Tx/Rx", "Function Calls", "All" },

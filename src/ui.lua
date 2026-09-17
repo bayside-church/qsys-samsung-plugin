@@ -39,6 +39,12 @@ Controls.PairWS.EventHandler = function(ctl)
   Ws.connect()
 end
 
+Controls.RPCToken.EventHandler = function(ctl) Device.adoptRpcToken(ctl.String) end
+Controls.WSToken.EventHandler  = function(ctl)
+  Ws.token = ctl.String
+  if Ws.state ~= "connected" then Ws.disconnect(); Ws.connect() end
+end
+
 Controls.ClearTokens.EventHandler = function(ctl)
   if not ctl.Boolean then return end
   Controls.RPCToken.String = ""

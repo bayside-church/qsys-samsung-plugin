@@ -54,17 +54,22 @@ end
 
 local function refreshStatus()
   if Device.state ~= "Connected" then return end
+  local offIsCompromised = (Properties["Power Off Reports As"] or {}).Value == "Compromised"
   if wsDegraded and Device.caps.inputSourceControl == false then
     setStatus("Compromised", "Connected; websocket not paired — input switching unavailable")
+  elseif offIsCompromised and Device.power == false then
+    setStatus("Compromised", "Connected; TV is off")
   else
-    setStatus("OK", "Connected")
+    setStatus("OK", Device.power == false and "Connected; TV is off" or "Connected")
   end
 end
 
 local function setPower(on)
+  local changed = Device.power ~= on
   Device.power = on
   Controls.PowerState.Boolean = on == true
   Controls.PowerStateText.String = on == nil and "Unknown" or (on and "On" or "Off")
+  if changed then refreshStatus() end
 end
 
 local function addChoice(list, v)
@@ -168,7 +173,10 @@ function Device.connect()
   setStatus("Initializing", "Connecting")
   Device.fetchInfo(function()
     if Rpc.token == "" then
-      Device.pair()
+      -- Never pair on our own: a new token revokes whatever controller held the
+      -- TV before (one token per TV). Only the Pair button calls createAccessToken.
+      setState("Pairing")
+      setStatus("Fault", "Not paired — press Pair (RPC)")
     else
       Device.probe()
     end
@@ -370,6 +378,18 @@ function Device.onWsEvent(kind, a, b)
   elseif kind == "error" then
     wsDegraded = true
     refreshStatus()
+  end
+end
+
+-- A token written into the control from outside (QRC, a paste) takes effect
+-- immediately; no restart or re-pair needed.
+function Device.adoptRpcToken(tok)
+  tok = tok or ""
+  if tok == Rpc.token then return end
+  Rpc.token = tok
+  Log.fn("RPC token replaced externally")
+  if Device.state ~= "Connected" then
+    if tok ~= "" then Device.connect() end
   end
 end
 

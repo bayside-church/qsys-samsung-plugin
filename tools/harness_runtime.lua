@@ -33,6 +33,7 @@ Properties = {
   ["Power-On Method"]         = { Value = "RPC" },
   ["Input After Power-On"]    = { Value = STEER_TARGET },
   ["Input Cycle Attempt Cap"] = { Value = 6 },
+  ["Power Off Reports As"]    = { Value = "Compromised" },
   ["Debug Print"]             = { Value = "All" },
 }
 
