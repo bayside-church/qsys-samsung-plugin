@@ -28,6 +28,10 @@ Controls.ArtMode.EventHandler    = function(ctl) Device.setArtMode(ctl.Boolean) 
 Controls.PairRPC.EventHandler = function(ctl)
   if not ctl.Boolean then return end -- momentary: act on press only
   if Device.state == "Disconnected" and Controls.Status.Value == 3 then return end -- no IP
+  if Device.tier == "ws" then
+    Device.setError("This set has no IP Control; use Pair (WebSocket)")
+    return
+  end
   Device.pair()
 end
 

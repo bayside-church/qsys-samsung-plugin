@@ -24,7 +24,9 @@ local keyQueue = {}
 local keyTimer = nil
 local sending = false
 local reconnectTimer = nil
+local holdTimer = nil        -- how long queued keys wait for a (re)connect
 local backoff = 2
+Ws.holdSeconds = 6
 local onEvent = function(...) end   -- Device hooks this: onEvent(name, detail)
 
 local function b64(s)
@@ -45,6 +47,13 @@ function Ws.init(opts)
     reconnectTimer.EventHandler = function()
       reconnectTimer:Stop()
       if Ws.enabled and Ws.state == "disconnected" then Ws.connect() end
+    end
+  end
+  if not holdTimer then
+    holdTimer = Timer.New()
+    holdTimer.EventHandler = function()
+      holdTimer:Stop()
+      if Ws.state ~= "connected" then Ws.failQueue("websocket not connected") end
     end
   end
   if not keyTimer then
@@ -95,6 +104,7 @@ function Ws.connect()
         onEvent("token", tok)
       end
       backoff = 2
+      if holdTimer then holdTimer:Stop() end
       setState("connected")
       Ws.flush()
     elseif msg.event == "ms.channel.timeOut" then
@@ -138,22 +148,32 @@ function Ws.disconnect()
   setState("disconnected")
 end
 
+function Ws.failQueue(err)
+  local q = keyQueue; keyQueue = {}
+  for _, item in ipairs(q) do
+    if item.cb then item.cb(false, err) end
+  end
+end
+
 -- Queue a keycode (e.g. "KEY_HDMI"). Paced by Ws.keyGap. cb(ok, err) optional.
+-- If the socket is down but we hold a token, connect and send on the handshake:
+-- a TV in network standby accepts the connection and KEY_POWER wakes it.
 function Ws.sendKey(key, cb)
   keyQueue[#keyQueue + 1] = { key = key, cb = cb }
-  Ws.flush()
+  if Ws.state == "connected" then return Ws.flush() end
+  if Ws.token == "" then return Ws.failQueue("websocket not paired") end
+  if Ws.state == "disconnected" then
+    if reconnectTimer then reconnectTimer:Stop() end
+    Ws.enabled = true
+    Ws.connect()
+  end
+  holdTimer:Stop()
+  holdTimer:Start(Ws.holdSeconds)
 end
 
 function Ws.flush()
   if sending or #keyQueue == 0 then return end
-  if Ws.state ~= "connected" then
-    -- fail everything queued rather than silently holding keys forever
-    local q = keyQueue; keyQueue = {}
-    for _, item in ipairs(q) do
-      if item.cb then item.cb(false, "websocket not connected") end
-    end
-    return
-  end
+  if Ws.state ~= "connected" then return end -- wait for the handshake (or the hold timer)
   local item = table.remove(keyQueue, 1)
   local frame = json.encode({
     method = "ms.remote.control",

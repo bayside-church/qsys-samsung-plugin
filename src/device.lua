@@ -190,9 +190,13 @@ function Device.connect()
     -- set with IP Control; a transport error on 1516 while :8001 answered means
     -- a 2016-2019 set with no IP Remote — websocket-only tier.
     Rpc.call("getTVStates", nil, function(resp)
-      if resp.kind == "transport" and Device.info8001 then
-        return Device.connectWsOnly()
-      elseif resp.kind == "transport" then
+      if resp.kind == "transport" then
+        local refused = tostring(resp.message):lower():find("refused") ~= nil
+        if Device.info8001 or (refused and Device.tier == "ws") then
+          -- 1516 closed but the set is alive (8001 answered now, or it was
+          -- already classified websocket-only and is just in standby).
+          return Device.connectWsOnly()
+        end
         return Device.lost("Unreachable: " .. resp.message)
       end
       Device.tier = "rpc"
@@ -230,7 +234,7 @@ end
 function Device.wol()
   local mac = (Controls.MAC.String or ""):gsub("[^%x]", "")
   if #mac ~= 12 then
-    Device.setError("Wake-on-LAN needs the TV's MAC (not known yet)")
+    Log.fn("Wake-on-LAN skipped: MAC unknown")
     return false
   end
   local bytes = {}
@@ -242,11 +246,13 @@ function Device.wol()
   end
   Log.tx("WoL", mac)
   WolSocket:Send("255.255.255.255", 9, packet)
+  if Rpc.ip and Rpc.ip ~= "" then WolSocket:Send(Rpc.ip, 9, packet) end
   return true
 end
 
 -- GET :8001/api/v2/ — plain HTTP, no auth. Model and MAC. Non-fatal.
-function Device.fetchInfo(next)
+function Device.fetchInfo(next, attempt)
+  attempt = attempt or 1
   local url = string.format("http://%s:8001/api/v2/", Rpc.ip)
   Log.tx("HTTP GET", url)
   HttpClient.Download({
@@ -255,6 +261,10 @@ function Device.fetchInfo(next)
     EventHandler = function(_, code, data, err)
       Log.rx("HTTP", code, err or "", data or "")
       Device.info8001 = (code == 200 and data ~= nil)
+      if not Device.info8001 and attempt < 3 then
+        -- The web service drops out for a few seconds around power transitions.
+        return Timer.CallAfter(function() Device.fetchInfo(next, attempt + 1) end, 2)
+      end
       if code == 200 and data then
         local ok, info = pcall(json.decode, data)
         local dev = ok and type(info) == "table" and info.device or nil
@@ -523,6 +533,7 @@ function Device.powerOff()
   if Device.tier == "ws" then
     -- Non-Frame sets go to standby on KEY_POWER. (A Frame would toggle art mode,
     -- but a Frame always has IP Control and never lands in this tier.)
+    if Device.power == false then return end -- KEY_POWER would wake it
     Ws.sendKey("KEY_POWER", function(ok, err)
       if ok then setPower(false) else Device.setError("Power off: " .. tostring(err)) end
     end)
@@ -541,14 +552,24 @@ function Device.powerOn()
   local method = Properties["Power-On Method"].Value
   if method == "None" then return end
   if Device.tier == "ws" or method == "WoL" then
-    if Device.wol() then
-      setPower(nil)
-      -- No readback on this tier: assume it came up, then steer blind after a boot delay.
-      Timer.CallAfter(function()
-        local target = Properties["Input After Power-On"].Value
-        if target and target ~= "None" then Device.steer(target) end
-      end, 15)
-    end
+    -- Sets in network standby accept the websocket and wake on KEY_POWER
+    -- (verified on a 2018 NU6900). Send WoL too; it's harmless and covers
+    -- sets whose standby closes the ports.
+    if Device.tier == "ws" and Device.power == true then return end -- KEY_POWER would toggle it off
+    Device.wol()
+    Ws.sendKey("KEY_POWER", function(ok, err)
+      if ok then
+        setPower(true)
+        Device.setError("")
+      else
+        Device.setError("Power on: " .. tostring(err) .. " (Wake-on-LAN sent)")
+      end
+    end)
+    -- No readback on this tier: steer blind after a boot delay.
+    Timer.CallAfter(function()
+      local target = Properties["Input After Power-On"].Value
+      if target and target ~= "None" then Device.steer(target) end
+    end, 15)
     return
   end
   simple("powerControl", { power = "powerOn" }, function()
