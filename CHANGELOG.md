@@ -37,6 +37,8 @@ this project uses Q-SYS four-part plugin versioning (`x.x.x.x`).
 ### Known gaps
 - Not yet run on a physical Core; no multi-day unattended run; MDC / SmartThings
   tiers not implemented.
+- Websocket tier verified only to the TLS handshake — pairing needs a client on
+  the TV's subnet, which no test has had yet.
 
 
 ### Added

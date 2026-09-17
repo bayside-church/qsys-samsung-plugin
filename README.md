@@ -28,13 +28,15 @@ Consumer Tizen sets are controllable: **Samsung IP Control**, a JSON-RPC 2.0 API
 
 Detected automatically: a set that refuses port 1516 but answers on 8001 is placed in the websocket-only tier with an explicit Status message.
 
+> **The websocket tier is untested past the TLS handshake.** Every test so far ran from a workstation off the TVs' subnets, and Samsung refuses websocket pairing from off-subnet clients. Key sending, token capture and reconnect are written but have not yet been exercised against a TV. Current (2020+) sets never use the websocket.
+
 ## Verified devices
 
 | Model | Year | Class | Notes |
 |---|---|---|---|
 | QN50LS03FA (The Frame 50") | 2025 | IP Control + Frame | Full feature set. `inputSourceControl`/`directVolumeControl` present when on, `-32601` in standby. |
 | UN65M70HD (M70H 65") | 2026 | IP Control | Full feature set; the optional methods are present even in standby. Paired and controlled across subnets. |
-| UN55NU6900 (6-series 55") | 2018 | websocket only | No IP Control at all (no *IP Remote* menu item). Websocket tier; pairing must originate on the TV's subnet. |
+| UN55NU6900 (6-series 55") | 2018 | websocket only | No IP Control at all (no *IP Remote* menu item). Detected and classified correctly; websocket pairing not yet attempted from its subnet, so control is unverified. |
 
 ## Requirements
 
