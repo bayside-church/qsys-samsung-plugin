@@ -23,6 +23,8 @@ Device.artMode = nil
 Device.isFrame = false
 Device.caps = {}
 Device.steering = false
+Device.tier = "rpc"        -- "rpc" (IP Control) or "ws" (websocket-only: 2016-2019 sets without IP Remote)
+Device.info8001 = false    -- did GET :8001/api/v2/ answer?
 
 local BACKOFF_MIN, BACKOFF_MAX = 2, 30
 local backoff = BACKOFF_MIN
@@ -55,7 +57,11 @@ end
 local function refreshStatus()
   if Device.state ~= "Connected" then return end
   local offIsCompromised = (Properties["Power Off Reports As"] or {}).Value == "Compromised"
-  if wsDegraded and Device.caps.inputSourceControl == false then
+  if Device.tier == "ws" then
+    setStatus("Compromised", wsDegraded
+      and "No IP Control on this set; websocket not paired — no control possible"
+      or  "No IP Control on this set — websocket only, no status readback")
+  elseif wsDegraded and Device.caps.inputSourceControl == false then
     setStatus("Compromised", "Connected; websocket not paired — input switching unavailable")
   elseif offIsCompromised and Device.power == false then
     setStatus("Compromised", "Connected; TV is off")
@@ -144,6 +150,8 @@ function Device.start()
     setStatus("NotPresent", "No IP address configured")
     return
   end
+  local macProp = Properties["MAC Address"] and Properties["MAC Address"].Value or ""
+  if macProp ~= "" and (Controls.MAC.String == "") then Controls.MAC.String = macProp end
   Rpc.init({
     ip = ip,
     port = Properties["RPC Port"].Value,
@@ -172,15 +180,63 @@ function Device.connect()
   setState("Connecting")
   setStatus("Initializing", "Connecting")
   Device.fetchInfo(function()
-    if Rpc.token == "" then
-      -- Never pair on our own: a new token revokes whatever controller held the
-      -- TV before (one token per TV). Only the Pair button calls createAccessToken.
-      setState("Pairing")
-      setStatus("Fault", "Not paired — press Pair (RPC)")
-    else
-      Device.probe()
-    end
+    -- Is IP Control there at all? A tokenless getTVStates answers -32700 on a
+    -- set with IP Control; a transport error on 1516 while :8001 answered means
+    -- a 2016-2019 set with no IP Remote — websocket-only tier.
+    Rpc.call("getTVStates", nil, function(resp)
+      if resp.kind == "transport" and Device.info8001 then
+        return Device.connectWsOnly()
+      elseif resp.kind == "transport" then
+        return Device.lost("Unreachable: " .. resp.message)
+      end
+      Device.tier = "rpc"
+      if Rpc.token == "" then
+        -- Never pair on our own: a new token revokes whatever controller held the
+        -- TV before (one token per TV). Only the Pair button calls createAccessToken.
+        setState("Pairing")
+        setStatus("Fault", "Not paired — press Pair (RPC)")
+      else
+        Device.probe()
+      end
+    end, false)
   end)
+end
+
+-- Websocket-only tier (class B, research doc §7): keys out, nothing back.
+-- Power off = KEY_POWER; power on = Wake-on-LAN; input = blind KEY_HDMI.
+function Device.connectWsOnly()
+  Device.tier = "ws"
+  Device.caps = { rpc = false, inputSourceControl = false, directVolumeControl = false, artModeControl = false }
+  Device.isFrame = false
+  Controls.Capabilities.String = "no IP Control (websocket only) — keys, no readback"
+  Controls.ArtMode.IsDisabled = true
+  Controls.Volume.IsDisabled = true
+  setPower(nil)
+  pollTimer:Stop()
+  setState("Connected")
+  backoff = BACKOFF_MIN
+  setStatus("Compromised", "No IP Control on this set — websocket only, no status readback")
+  Ws.connect()
+end
+
+-- Wake-on-LAN: FF×6 + MAC×16, UDP broadcast to port 9. The socket is global
+-- so the GC can't collect it mid-send.
+function Device.wol()
+  local mac = (Controls.MAC.String or ""):gsub("[^%x]", "")
+  if #mac ~= 12 then
+    Device.setError("Wake-on-LAN needs the TV's MAC (not known yet)")
+    return false
+  end
+  local bytes = {}
+  for i = 1, 12, 2 do bytes[#bytes + 1] = string.char(tonumber(mac:sub(i, i + 1), 16)) end
+  local packet = string.rep("\xFF", 6) .. string.rep(table.concat(bytes), 16)
+  if not WolSocket then
+    WolSocket = UdpSocket.New()
+    WolSocket:Open()
+  end
+  Log.tx("WoL", mac)
+  WolSocket:Send("255.255.255.255", 9, packet)
+  return true
 end
 
 -- GET :8001/api/v2/ — plain HTTP, no auth. Model and MAC. Non-fatal.
@@ -192,6 +248,7 @@ function Device.fetchInfo(next)
     Timeout = 5,
     EventHandler = function(_, code, data, err)
       Log.rx("HTTP", code, err or "", data or "")
+      Device.info8001 = (code == 200 and data ~= nil)
       if code == 200 and data then
         local ok, info = pcall(json.decode, data)
         local dev = ok and type(info) == "table" and info.device or nil
@@ -365,7 +422,7 @@ function Device.onWsEvent(kind, a, b)
   elseif kind == "pairing_refused" then
     wsDegraded = true
     -- Only an error if this set actually needs the websocket for input switching.
-    if Device.caps.inputSourceControl == false then
+    if Device.tier == "ws" or Device.caps.inputSourceControl == false then
       Device.setError("Websocket pairing refused — pair from the TV's own subnet (ms.channel.timeOut)")
     else
       Log.fn("websocket pairing refused (not needed: inputSourceControl available)")
@@ -454,6 +511,14 @@ local function waitForPower(target, deadline, cb)
 end
 
 function Device.powerOff()
+  if Device.tier == "ws" then
+    -- Non-Frame sets go to standby on KEY_POWER. (A Frame would toggle art mode,
+    -- but a Frame always has IP Control and never lands in this tier.)
+    Ws.sendKey("KEY_POWER", function(ok, err)
+      if ok then setPower(false) else Device.setError("Power off: " .. tostring(err)) end
+    end)
+    return
+  end
   simple("powerControl", { power = "powerOff" }, function()
     Device.steering = false
     waitForPower(false, 20, function(ok)
@@ -464,7 +529,19 @@ end
 
 -- powerOn → wait for on → (Frame) art mode off → steer input.
 function Device.powerOn()
-  if Properties["Power-On Method"].Value == "None" then return end
+  local method = Properties["Power-On Method"].Value
+  if method == "None" then return end
+  if Device.tier == "ws" or method == "WoL" then
+    if Device.wol() then
+      setPower(nil)
+      -- No readback on this tier: assume it came up, then steer blind after a boot delay.
+      Timer.CallAfter(function()
+        local target = Properties["Input After Power-On"].Value
+        if target and target ~= "None" then Device.steer(target) end
+      end, 15)
+    end
+    return
+  end
   simple("powerControl", { power = "powerOn" }, function()
     waitForPower(true, 40, function(ok)
       if not ok then return Device.setError("TV did not report on within 40 s") end
@@ -504,6 +581,20 @@ end
 function Device.steer(target, cb)
   cb = cb or function() end
   if not target or target == "" or target == "None" then return cb(true) end
+  if Device.tier == "ws" then
+    -- Blind: one KEY_HDMI per press, no way to verify. Expose it honestly.
+    local key = (target == "TV") and "KEY_TV" or "KEY_HDMI"
+    Ws.sendKey(key, function(ok, err)
+      if ok then
+        Controls.InputState.String = "unknown (sent " .. key .. ")"
+        Device.setError("")
+      else
+        Device.setError("Cannot switch input: " .. tostring(err))
+      end
+      cb(ok)
+    end)
+    return
+  end
   Device.steering = true
   if Device.caps.inputSourceControl ~= false then -- true or unknown: try the direct path
     Rpc.call("inputSourceControl", { inputSource = target }, function(resp)

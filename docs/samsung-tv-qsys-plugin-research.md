@@ -101,7 +101,7 @@ Errors: `-32601` method not found · `-32602` invalid params · `-32002` failed 
 Protocol reference: [IP Control Protocol Reference](https://github.com/serjeleone/ha-samsungtv-smart/blob/main/IP_Control_Protocol_Reference.md) (empirically enumerated on 2024 + 2025 Frames, with Wall PRO cross-reference — directly relevant if the same plugin targets commercial panels).
 
 **Prerequisites, all of which will bite you in the field:**
-- **IP Remote must be enabled**: Settings → All Settings → Connection → Network → Expert Settings → *IP Remote*. This is what opens 1516.
+- **IP Remote must be enabled**: Settings → All Settings → Connection → Network → Expert Settings → *IP Remote*. This is what opens 1516. Not to be confused with **"Cable Box IP Remote"** (External Device Manager), which is the TV controlling a set-top box and has nothing to do with port 1516. A 2018 Tizen set (NU-series) has only the latter — no IP Control at all, class B.
 - **Pair from the TV's own subnet.** Approval prompts (RPC *and* websocket) never render for requests originating on another subnet — the socket connects and then hangs silently with no prompt. This is the single biggest time sink.
 - **Pair while the TV is on, not in Art Mode** — the prompt doesn't draw in Art Mode; the call just times out.
 - **Tokens persist** across power cycles and reboots. Only a factory reset, disabling IP Remote, or removing the device from the TV's device list revokes them.

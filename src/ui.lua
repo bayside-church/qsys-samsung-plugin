@@ -17,9 +17,9 @@ Controls.HDMICycle.EventHandler = function()
   end)
 end
 
-Controls.VolumeUp.EventHandler   = function() Device.volumeUp() end
-Controls.VolumeDown.EventHandler = function() Device.volumeDown() end
-Controls.Mute.EventHandler       = function(ctl) Device.setMute(ctl.Boolean) end
+Controls.VolumeUp.EventHandler   = function() if Device.tier == "ws" then Ws.sendKey("KEY_VOLUP") else Device.volumeUp() end end
+Controls.VolumeDown.EventHandler = function() if Device.tier == "ws" then Ws.sendKey("KEY_VOLDOWN") else Device.volumeDown() end end
+Controls.Mute.EventHandler       = function(ctl) if Device.tier == "ws" then Ws.sendKey("KEY_MUTE") else Device.setMute(ctl.Boolean) end end
 Controls.Volume.EventHandler     = function(ctl) Device.setVolume(ctl.Value) end
 Controls.ArtMode.EventHandler    = function(ctl) Device.setArtMode(ctl.Boolean) end
 

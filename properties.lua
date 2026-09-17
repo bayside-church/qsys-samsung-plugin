@@ -35,8 +35,13 @@ table.insert(props, {
 table.insert(props, {
   Name = "Power-On Method",
   Type = "enum",
-  Choices = { "RPC", "None" },
-  Value = "RPC",
+  Choices = { "RPC", "WoL", "None" },
+  Value = "RPC", -- WoL is used automatically on sets without IP Control
+})
+table.insert(props, {
+  Name = "MAC Address",
+  Type = "string",
+  Value = "", -- optional; learned from :8001/api/v2/ when blank. Needed for WoL while the TV is off.
 })
 table.insert(props, {
   Name = "Input After Power-On",

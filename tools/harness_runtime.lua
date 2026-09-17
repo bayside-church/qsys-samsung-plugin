@@ -31,6 +31,7 @@ Properties = {
   ["Friendly Name"]           = { Value = "Q-SYS Dev" },
   ["Poll Interval"]           = { Value = 5 },
   ["Power-On Method"]         = { Value = "RPC" },
+  ["MAC Address"]             = { Value = "" },
   ["Input After Power-On"]    = { Value = STEER_TARGET },
   ["Input Cycle Attempt Cap"] = { Value = 6 },
   ["Power Off Reports As"]    = { Value = "Compromised" },
