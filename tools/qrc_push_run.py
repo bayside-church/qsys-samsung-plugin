@@ -17,8 +17,7 @@ Control Script component whose "Script Access" property is All.
 WARNING: the pushed script becomes the Control Script's code and RE-RUNS every
 time the design (re)starts — including every File -> Emulate. A pushed power
 scenario will fire again then. When done testing, push an idle script:
-    printf 'print("idle")
-' > idle.lua && python tools/qrc_push_run.py idle.lua 3
+    echo 'print("idle")' > idle.lua && python tools/qrc_push_run.py idle.lua 3
 """
 import json
 import re
