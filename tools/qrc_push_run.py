@@ -13,6 +13,12 @@ Control Script component whose "Script Access" property is All.
 * `--set NAME=value` rewrites the first `NAME = "..."` assignment in the
   expanded script, so IPs and tokens stay out of the repo.
 * Streaming stops early when a log line containing "FULL TRANSCRIPT" arrives.
+
+WARNING: the pushed script becomes the Control Script's code and RE-RUNS every
+time the design (re)starts — including every File -> Emulate. A pushed power
+scenario will fire again then. When done testing, push an idle script:
+    printf 'print("idle")
+' > idle.lua && python tools/qrc_push_run.py idle.lua 3
 """
 import json
 import re

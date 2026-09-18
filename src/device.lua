@@ -225,7 +225,9 @@ end
 -- ignored on that set), so it is only ever sent from a known state.
 local REACH_ON_SECONDS = 240
 local WS_POLL_SECONDS = 20
+local UNREACH_OFF_POLLS = 3   -- a booting TV drops off the network for a few seconds
 local reachableSince = nil
+local unreachablePolls = 0
 
 local function wsPoll()
   if Device.tier ~= "ws" then return end
@@ -235,6 +237,7 @@ local function wsPoll()
     EventHandler = function(_, code)
       local now = os.time()
       if code == 200 then
+        unreachablePolls = 0
         reachableSince = reachableSince or now
         if now - reachableSince >= REACH_ON_SECONDS and Device.power ~= true then
           Log.fn("ws tier: reachable for", now - reachableSince, "s; inferring ON")
@@ -242,8 +245,9 @@ local function wsPoll()
         end
       else
         reachableSince = nil
-        if Device.power ~= false then
-          Log.fn("ws tier: unreachable; inferring OFF")
+        unreachablePolls = unreachablePolls + 1
+        if unreachablePolls >= UNREACH_OFF_POLLS and Device.power ~= false then
+          Log.fn("ws tier: unreachable for", unreachablePolls, "polls; inferring OFF")
           setPower(false)
         end
       end
@@ -661,9 +665,9 @@ function Device.powerOn()
   if Device.state ~= "Connected" then
     -- Not classified yet (or the TV is unreachable): fire every wake method we
     -- have. Each is harmless where it doesn't apply.
-    Log.fn("powerOn before classification; trying all methods")
+    -- Only the discrete methods: KEY_POWER is a toggle and the state is unknown.
+    Log.fn("powerOn before classification; Wake-on-LAN + RPC only")
     Device.wol()
-    if Ws.token ~= "" then Ws.sendKey("KEY_POWER") end
     if Rpc.token ~= "" then Rpc.call("powerControl", { power = "powerOn" }, function() end) end
     return
   end

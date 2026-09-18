@@ -1,4 +1,4 @@
-BuildVersion = "0.1.0.14" -- updated by the compiler
+BuildVersion = "0.1.0.16" -- updated by the compiler
 PluginInfo = {
   Name = "Samsung~TV Control v" .. BuildVersion,
   Version = BuildVersion,

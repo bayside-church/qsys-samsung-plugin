@@ -120,6 +120,8 @@ There is no standalone Lua on a typical Designer workstation, so tests run **ins
 
 A plugin instance with *Script Access = All* can likewise be read and driven over QRC (`tools/qrc.py`), which is how the verified-device results above were produced.
 
+**Gotcha:** whatever `qrc_push_run.py` last pushed into the Control Script re-runs on every emulation start. Push an idle script (`print("idle")`) when you're done, or a power scenario will fire the next time you press Emulate.
+
 ## Known limitations
 
 Confirmed against hardware:
