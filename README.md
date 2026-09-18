@@ -16,7 +16,7 @@ Consumer Tizen sets are controllable: **Samsung IP Control**, a JSON-RPC 2.0 API
 
 | Feature | Consumer 2020+ (IP Control) | Consumer 2016–2019 (websocket only) |
 |---|---|---|
-| Power on from standby / off / toggle, with true state | ✔ verified | on: Wake-on-LAN · off: `KEY_POWER` · no state |
+| Power on from standby / off / toggle, with true state | ✔ verified | ✔ verified: off via `KEY_POWER`; on via `KEY_POWER` while the TV's radio is still up (~2 min after standby) or Wake-on-LAN after it sleeps · no state readback |
 | Input select with readback | ✔ direct (`inputSourceControl`) | blind `KEY_HDMI` |
 | Volume — absolute, up/down, mute, readback | ✔ verified | keys only, no readback |
 | The Frame — art mode on/off/state | ✔ verified | — |
@@ -28,7 +28,7 @@ Consumer Tizen sets are controllable: **Samsung IP Control**, a JSON-RPC 2.0 API
 
 Detected automatically: a set that refuses port 1516 but answers on 8001 is placed in the websocket-only tier with an explicit Status message.
 
-> **The websocket tier is untested past the TLS handshake.** Every test so far ran from a workstation off the TVs' subnets, and Samsung refuses websocket pairing from off-subnet clients. Key sending, token capture and reconnect are written but have not yet been exercised against a TV. Current (2020+) sets never use the websocket.
+> The websocket tier — pairing, keys, wake — is verified on a 2018 set from a client on its subnet (Samsung refuses websocket pairing from off-subnet clients). Current (2020+) sets never need it.
 
 ## Verified devices
 
@@ -36,7 +36,7 @@ Detected automatically: a set that refuses port 1516 but answers on 8001 is plac
 |---|---|---|---|
 | QN50LS03FA (The Frame 50") | 2025 | IP Control + Frame | Full feature set. `inputSourceControl`/`directVolumeControl` present when on, `-32601` in standby. |
 | UN65M70HD (M70H 65") | 2026 | IP Control | Full feature set; the optional methods are present even in standby. Paired and controlled across subnets. |
-| UN55NU6900 (6-series 55") | 2018 | websocket only | No IP Control at all (no *IP Remote* menu item). Detected and classified correctly; websocket pairing not yet attempted from its subnet, so control is unverified. |
+| UN55NU6900 (6-series 55") | 2018 | websocket only | No IP Control (no *IP Remote* menu item). Pairing, off, on (websocket within ~2 min of standby; Wake-on-LAN after — needs three repeated unicast packets), and keys all verified from the TV's subnet. |
 
 ## Requirements
 
@@ -132,6 +132,7 @@ Confirmed against hardware:
 | Power off via websocket on a Frame | `KEY_POWER` toggles Art Mode instead. RPC only. |
 | State reads via websocket | None. |
 | Websocket pairing across subnets | Refused (`ms.channel.timeOut`). Only matters for 2016–2019 sets. |
+| Waking a 2016–2019 set | Its Wi-Fi stays up ~2 min after standby (websocket `KEY_POWER` works), then sleeps. After that only Wake-on-LAN works, and only as **repeated unicast** (three rounds) — a single packet, or broadcast alone, does not wake it. Requires *Power On with Mobile* on the TV. |
 | Bad/revoked token | The TV answers `-32700 Parse error`, not `-32010`. Both are treated as *re-pair*. |
 
 Samsung's IP Control and websocket APIs are **unofficial and empirically enumerated**. Firmware updates carry no stability guarantee.

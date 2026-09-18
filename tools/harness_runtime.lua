@@ -23,6 +23,8 @@ WS_TOKEN     = ""
 SCENARIO     = "readonly"
 STEER_TARGET = "HDMI2"
 FRIENDLY_NAME = "Q-SYS Dev"
+MAC_ADDRESS = ""
+CONNECT_WAIT = "8"   -- seconds (string so --set can override) before the scenario starts; classification of a set in standby can take ~15
 
 -- Fake design-time surface --------------------------------------------------
 Properties = {
@@ -32,7 +34,7 @@ Properties = {
   ["Friendly Name"]           = { Value = FRIENDLY_NAME },
   ["Poll Interval"]           = { Value = 5 },
   ["Power-On Method"]         = { Value = "RPC" },
-  ["MAC Address"]             = { Value = "" },
+  ["MAC Address"]             = { Value = MAC_ADDRESS },
   ["Input After Power-On"]    = { Value = STEER_TARGET },
   ["Input Cycle Attempt Cap"] = { Value = 6 },
   ["Power Off Reports As"]    = { Value = "Compromised" },
@@ -112,7 +114,7 @@ local function setToggle(name, on)
 end
 
 Timer.CallAfter(function()
-  dump("AFTER CONNECT (8s)")
+  dump("AFTER CONNECT (" .. CONNECT_WAIT .. "s)")
   if SCENARIO == "readonly" then
     Timer.CallAfter(finish, 6)
 
@@ -133,7 +135,7 @@ Timer.CallAfter(function()
 
   elseif SCENARIO == "artmode" then
     setToggle("ArtMode", true)
-    Timer.CallAfter(function() dump("IN ART MODE"); setToggle("ArtMode", false) end, 8)
+    Timer.CallAfter(function() dump("IN ART MODE"); setToggle("ArtMode", false) end, tonumber(CONNECT_WAIT) or 8)
     Timer.CallAfter(finish, 20)
 
   elseif SCENARIO == "poweroff" then
@@ -148,4 +150,4 @@ Timer.CallAfter(function()
     print("unknown SCENARIO " .. tostring(SCENARIO))
     finish()
   end
-end, 8)
+end, tonumber(CONNECT_WAIT) or 8)

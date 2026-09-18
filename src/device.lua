@@ -229,8 +229,62 @@ function Device.connectWsOnly()
   Ws.connect()
 end
 
--- Wake-on-LAN: FF×6 + MAC×16, UDP broadcast to port 9. The socket is global
--- so the GC can't collect it mid-send.
+-- Wake-on-LAN: FF×6 + MAC×16 to UDP 9/7. Verified on a 2018 NU6900 over
+-- Wi-Fi: one packet does not wake it; three rounds of unicast a second apart
+-- do (from a Q-SYS UdpSocket, bound or not). Broadcasts are added for hosts
+-- whose ARP entry for the sleeping TV has expired; one socket is bound per
+-- interface because a limited broadcast otherwise leaves only the default
+-- one (multi-homed Core, or the dev PC). Sockets are globals so the GC can't
+-- collect them mid-send.
+WolSockets = WolSockets or {}
+local WOL_ROUNDS = 3
+
+local function ip2n(ip)
+  local a, b, c, d = ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+  if not a then return nil end
+  return ((a * 256 + b) * 256 + c) * 256 + d
+end
+local function n2ip(n)
+  return string.format("%d.%d.%d.%d", (n >> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255)
+end
+
+-- Unicast first — it is what verifiably wakes the NU6900 — then a /24
+-- directed broadcast and the limited broadcast for hosts whose ARP entry for
+-- the sleeping TV has expired. Kept short: Q-SYS's UDP send appears to drop
+-- packets when many are queued in one pass.
+local function wolTargets()
+  local t = {}
+  local n = Rpc.ip and ip2n(Rpc.ip)
+  if n then
+    t[#t + 1] = Rpc.ip
+    t[#t + 1] = n2ip((n & 0xFFFFFF00) | 0xFF)
+  end
+  t[#t + 1] = "255.255.255.255"
+  return t
+end
+
+local function wolSockets()
+  local binds = {}
+  local okIf, ifs = pcall(function() return Network.Interfaces() end)
+  if okIf and type(ifs) == "table" then
+    for _, nic in ipairs(ifs) do
+      if type(nic.Address) == "string" and ip2n(nic.Address) then binds[#binds + 1] = nic.Address end
+    end
+  end
+  if #binds == 0 then binds[1] = "" end -- no interface list: one unbound socket
+  local socks = {}
+  for _, addr in ipairs(binds) do
+    local sock = WolSockets[addr]
+    if not sock then
+      sock = UdpSocket.New()
+      local okOpen = pcall(function() if addr ~= "" then sock:Open(addr) else sock:Open() end end)
+      if okOpen then WolSockets[addr] = sock else sock = nil end
+    end
+    if sock then socks[#socks + 1] = sock end
+  end
+  return socks
+end
+
 function Device.wol()
   local mac = (Controls.MAC.String or ""):gsub("[^%x]", "")
   if #mac ~= 12 then
@@ -240,14 +294,21 @@ function Device.wol()
   local bytes = {}
   for i = 1, 12, 2 do bytes[#bytes + 1] = string.char(tonumber(mac:sub(i, i + 1), 16)) end
   local packet = string.rep("\xFF", 6) .. string.rep(table.concat(bytes), 16)
-  if not WolSocket then
-    WolSocket = UdpSocket.New()
-    WolSocket:Open()
+  local socks, targets = wolSockets(), wolTargets()
+  local function round(k)
+    local sent = 0
+    for _, sock in ipairs(socks) do
+      for _, dst in ipairs(targets) do
+        for _, port in ipairs({ 9, 7 }) do
+          if pcall(function() sock:Send(dst, port, packet) end) then sent = sent + 1 end
+        end
+      end
+    end
+    Log.tx("WoL", mac, "round", k, "/", WOL_ROUNDS, "-", sent, "packets on", #socks, "sockets")
+    if k < WOL_ROUNDS then Timer.CallAfter(function() round(k + 1) end, 1) end
   end
-  Log.tx("WoL", mac)
-  WolSocket:Send("255.255.255.255", 9, packet)
-  if Rpc.ip and Rpc.ip ~= "" then WolSocket:Send(Rpc.ip, 9, packet) end
-  return true
+  round(1)
+  return #socks > 0
 end
 
 -- GET :8001/api/v2/ — plain HTTP, no auth. Model and MAC. Non-fatal.
@@ -551,6 +612,15 @@ end
 function Device.powerOn()
   local method = Properties["Power-On Method"].Value
   if method == "None" then return end
+  if Device.state ~= "Connected" then
+    -- Not classified yet (or the TV is unreachable): fire every wake method we
+    -- have. Each is harmless where it doesn't apply.
+    Log.fn("powerOn before classification; trying all methods")
+    Device.wol()
+    if Ws.token ~= "" then Ws.sendKey("KEY_POWER") end
+    if Rpc.token ~= "" then Rpc.call("powerControl", { power = "powerOn" }, function() end) end
+    return
+  end
   if Device.tier == "ws" or method == "WoL" then
     -- Sets in network standby accept the websocket and wake on KEY_POWER
     -- (verified on a 2018 NU6900). Send WoL too; it's harmless and covers

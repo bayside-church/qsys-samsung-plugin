@@ -6,6 +6,19 @@ this project uses Q-SYS four-part plugin versioning (`x.x.x.x`).
 
 ## [Unreleased]
 
+### Added
+- Websocket-only tier verified on hardware (2018 NU6900): off via `KEY_POWER`;
+  on via `KEY_POWER` while the set's radio is up, else Wake-on-LAN — three
+  rounds of unicast + broadcast, one socket per interface.
+- Power On before classification fires every applicable wake method.
+- Writing a token control from outside takes effect immediately.
+
+### Fixed
+- Websocket stopped reconnecting after the TV entered standby.
+- Wake-on-LAN magic packet header was not `FF×6` (source-file encoding slip).
+- Pair (RPC) on a websocket-only set no longer leaves a misleading error.
+- :8001 lookup retried around power transitions; classification is sticky.
+
 ## [0.1.0.0] — 2026-09-17 — first usable release
 
 ### Added
