@@ -37,10 +37,9 @@ end
 
 Controls.PairWS.EventHandler = function(ctl)
   if not ctl.Boolean then return end
-  Ws.token = ""
+  Log.fn("Pair (WebSocket) pressed")
   Controls.WSToken.String = ""
-  Ws.disconnect()
-  Ws.connect()
+  Ws.pair()
 end
 
 Controls.RPCToken.EventHandler = function(ctl) Device.adoptRpcToken(ctl.String) end

@@ -24,12 +24,14 @@ Device.isFrame = false
 Device.caps = {}
 Device.steering = false
 Device.tier = "rpc"        -- "rpc" (IP Control) or "ws" (websocket-only: 2016-2019 sets without IP Remote)
+Device.wsDiscretePower = false -- set true once KEY_POWEROFF is verified on a set (see properties)
 Device.info8001 = false    -- did GET :8001/api/v2/ answer?
 
 local BACKOFF_MIN, BACKOFF_MAX = 2, 30
 local backoff = BACKOFF_MIN
 local reconnectTimer = Timer.New()
 local pollTimer = Timer.New()
+local wsPollTimer = Timer.New() -- websocket-only tier reachability poll (see wsPoll)
 local pollFailures = 0
 local wsDegraded = false
 
@@ -59,8 +61,9 @@ local function refreshStatus()
   local offIsCompromised = (Properties["Power Off Reports As"] or {}).Value == "Compromised"
   if Device.tier == "ws" then
     local msg
+    local inferred = Device.power == true and "on" or (Device.power == false and "off" or "unknown")
     if not wsDegraded then
-      msg = "No IP Control on this set — websocket only, no status readback"
+      msg = "No IP Control on this set — websocket only; power inferred " .. inferred
     elseif Ws.token == "" then
       msg = "No IP Control on this set; websocket not paired — press Pair (WebSocket)"
     else
@@ -176,6 +179,7 @@ end
 -- Stop all activity (design stop, harness teardown).
 function Device.stop()
   pollTimer:Stop()
+  wsPollTimer:Stop()
   reconnectTimer:Stop()
   Rpc.clear()
   Ws.disconnect()
@@ -214,6 +218,41 @@ end
 
 -- Websocket-only tier (class B, research doc §7): keys out, nothing back.
 -- Power off = KEY_POWER; power on = Wake-on-LAN; input = blind KEY_HDMI.
+-- Websocket-only sets give no power readback, but a 2018 NU6900 drops off
+-- the network ~3 min after standby and stays off until woken. So: reachable
+-- for REACH_ON_SECONDS continuously ⇒ on; unreachable ⇒ off; in between ⇒
+-- keep whatever we last commanded. KEY_POWER is a toggle (KEY_POWEROFF is
+-- ignored on that set), so it is only ever sent from a known state.
+local REACH_ON_SECONDS = 240
+local WS_POLL_SECONDS = 20
+local reachableSince = nil
+
+local function wsPoll()
+  if Device.tier ~= "ws" then return end
+  HttpClient.Download({
+    Url = string.format("http://%s:8001/api/v2/", Rpc.ip),
+    Timeout = 4,
+    EventHandler = function(_, code)
+      local now = os.time()
+      if code == 200 then
+        reachableSince = reachableSince or now
+        if now - reachableSince >= REACH_ON_SECONDS and Device.power ~= true then
+          Log.fn("ws tier: reachable for", now - reachableSince, "s; inferring ON")
+          setPower(true)
+        end
+      else
+        reachableSince = nil
+        if Device.power ~= false then
+          Log.fn("ws tier: unreachable; inferring OFF")
+          setPower(false)
+        end
+      end
+      refreshStatus()
+    end,
+  })
+end
+wsPollTimer.EventHandler = wsPoll
+
 function Device.connectWsOnly()
   Device.tier = "ws"
   Device.caps = { rpc = false, inputSourceControl = false, directVolumeControl = false, artModeControl = false }
@@ -227,6 +266,10 @@ function Device.connectWsOnly()
   backoff = BACKOFF_MIN
   setStatus("Compromised", "No IP Control on this set — websocket only, no status readback")
   Ws.connect()
+  reachableSince = os.time() -- :8001 just answered
+  wsPollTimer:Stop()
+  wsPollTimer:Start(WS_POLL_SECONDS)
+  wsPoll()
 end
 
 -- Wake-on-LAN: FF×6 + MAC×16 to UDP 9/7. Verified on a 2018 NU6900 over
@@ -592,11 +635,14 @@ end
 
 function Device.powerOff()
   if Device.tier == "ws" then
-    -- Non-Frame sets go to standby on KEY_POWER. (A Frame would toggle art mode,
-    -- but a Frame always has IP Control and never lands in this tier.)
-    if Device.power == false then return end -- KEY_POWER would wake it
+    -- KEY_POWEROFF is discrete (safe whatever the state); KEY_POWER toggles.
+    -- No readback on this tier, so never send the toggle unless we know it's on.
+    if Device.power == false then return end
+    if Device.power ~= true then
+      return Device.setError("Power state not yet known on this set (needs ~4 min reachable); refusing to send the power toggle")
+    end
     Ws.sendKey("KEY_POWER", function(ok, err)
-      if ok then setPower(false) else Device.setError("Power off: " .. tostring(err)) end
+      if ok then setPower(false); reachableSince = nil else Device.setError("Power off: " .. tostring(err)) end
     end)
     return
   end
@@ -625,16 +671,23 @@ function Device.powerOn()
     -- Sets in network standby accept the websocket and wake on KEY_POWER
     -- (verified on a 2018 NU6900). Send WoL too; it's harmless and covers
     -- sets whose standby closes the ports.
-    if Device.tier == "ws" and Device.power == true then return end -- KEY_POWER would toggle it off
-    Device.wol()
-    Ws.sendKey("KEY_POWER", function(ok, err)
-      if ok then
-        setPower(true)
-        Device.setError("")
-      else
-        Device.setError("Power on: " .. tostring(err) .. " (Wake-on-LAN sent)")
-      end
-    end)
+    if Device.tier == "ws" and Device.power == true then return end
+    Device.wol() -- harmless if the set is already on
+    if Device.tier == "ws" and Device.power == false then
+      -- Known off: the toggle is safe, and it wakes a set whose radio is still up.
+      Ws.sendKey("KEY_POWER", function(ok, err)
+        if ok then
+          setPower(true); reachableSince = os.time()
+          Device.setError("")
+        else
+          Device.setError("")  -- radio asleep; WoL is doing the work
+          Log.fn("KEY_POWER not deliverable (" .. tostring(err) .. "); relying on WoL")
+        end
+      end)
+    else
+      Device.setError("")
+      Log.fn("power state unknown; Wake-on-LAN only")
+    end
     -- No readback on this tier: steer blind after a boot delay.
     Timer.CallAfter(function()
       local target = Properties["Input After Power-On"].Value
@@ -670,6 +723,9 @@ function Device.powerOn()
 end
 
 function Device.powerToggle()
+  if Device.tier == "ws" and Device.power == nil then
+    return Device.setError("Power state unknown on this set; use On or Off")
+  end
   if Device.power then Device.powerOff() else Device.powerOn() end
 end
 

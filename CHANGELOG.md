@@ -11,6 +11,10 @@ this project uses Q-SYS four-part plugin versioning (`x.x.x.x`).
   on via `KEY_POWER` while the set's radio is up, else Wake-on-LAN — three
   rounds of unicast + broadcast, one socket per interface.
 - Power On before classification fires every applicable wake method.
+- Websocket-only sets: power state inferred from reachability (4 min
+  reachable ⇒ on, unreachable ⇒ off); the `KEY_POWER` toggle is never sent
+  from an unknown state. Websocket pairing only from the Pair button.
+- `tools/run_ws_cycle.sh`, `tools/qrc_tail.py`, `tools/qrc_raw.py`.
 - Writing a token control from outside takes effect immediately.
 
 ### Fixed

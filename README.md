@@ -16,7 +16,7 @@ Consumer Tizen sets are controllable: **Samsung IP Control**, a JSON-RPC 2.0 API
 
 | Feature | Consumer 2020+ (IP Control) | Consumer 2016–2019 (websocket only) |
 |---|---|---|
-| Power on from standby / off / toggle, with true state | ✔ verified | ✔ verified: off via `KEY_POWER`; on via `KEY_POWER` while the TV's radio is still up (~2 min after standby) or Wake-on-LAN after it sleeps · no state readback |
+| Power on from standby / off / toggle, with true state | ✔ verified | ✔ verified: state *inferred* (reachable 4 min ⇒ on; unreachable ⇒ off); off via `KEY_POWER` only when known on; on via Wake-on-LAN (+ `KEY_POWER` while the radio is still up) |
 | Input select with readback | ✔ direct (`inputSourceControl`) | blind `KEY_HDMI` |
 | Volume — absolute, up/down, mute, readback | ✔ verified | keys only, no readback |
 | The Frame — art mode on/off/state | ✔ verified | — |
@@ -132,6 +132,7 @@ Confirmed against hardware:
 | Power off via websocket on a Frame | `KEY_POWER` toggles Art Mode instead. RPC only. |
 | State reads via websocket | None. |
 | Websocket pairing across subnets | Refused (`ms.channel.timeOut`). Only matters for 2016–2019 sets. |
+| Power state on a 2016–2019 set | No readback, and `KEY_POWER` is a toggle (`KEY_POWEROFF`/`KEY_POWERON` are ignored). The plugin infers state from reachability — the set drops off the network ~3 min after standby — and refuses to send the toggle from an unknown state. Expect "Unknown" for the first 4 minutes after the design starts. |
 | Waking a 2016–2019 set | Its Wi-Fi stays up ~2 min after standby (websocket `KEY_POWER` works), then sleeps. After that only Wake-on-LAN works, and only as **repeated unicast** (three rounds) — a single packet, or broadcast alone, does not wake it. Requires *Power On with Mobile* on the TV. |
 | Bad/revoked token | The TV answers `-32700 Parse error`, not `-32010`. Both are treated as *re-pair*. |
 

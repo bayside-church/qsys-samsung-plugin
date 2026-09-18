@@ -80,20 +80,29 @@ local function setState(s, detail)
   end
 end
 
-function Ws.connect()
+-- Connect with the stored token. Connecting *without* a token is a pairing
+-- request (the TV prompts), so that only happens via Ws.pair() from the button.
+function Ws.connect(pairing)
   if not Ws.ip or Ws.ip == "" then return end
   if Ws.state ~= "disconnected" then return end
+  if Ws.token == "" and not pairing then
+    Log.fn("WS not paired; waiting for Pair (WebSocket)")
+    return
+  end
   Ws.enabled = true
   if sock then pcall(function() sock:Close() end) end
   sock = WebSocket.New()
   WsSocket = sock -- keep a global reference; see header comment
+  local mine = sock -- handlers of a superseded socket must not touch state
   setState("connecting")
 
   sock.Connected = function()
+    if sock ~= mine then return end
     Log.fn("WS socket open")
     -- stay "connecting" until ms.channel.connect confirms the TV accepted us
   end
   sock.Data = function(_, data)
+    if sock ~= mine then return end
     Log.rx("WS", data)
     local ok, msg = pcall(json.decode, data)
     if not ok or type(msg) ~= "table" then return end
@@ -122,12 +131,8 @@ function Ws.connect()
       onEvent("unauthorized", "ms.channel.unauthorized")
     end
   end
-  sock.Error = function(_, err)
-    Log.err("WS error:", err)
-    onEvent("error", tostring(err))
-  end
-  sock.Closed = function()
-    Log.fn("WS closed")
+  local function gone(why)
+    if sock ~= mine then return end
     setState("disconnected")
     if Ws.enabled then
       reconnectTimer:Stop()
@@ -135,9 +140,26 @@ function Ws.connect()
       backoff = math.min(backoff * 2, 30)
     end
   end
+  sock.Error = function(_, err)
+    if sock ~= mine then return end
+    Log.err("WS error:", err)
+    onEvent("error", tostring(err))
+    gone("error") -- a failed connect may never fire Closed
+  end
+  sock.Closed = function()
+    Log.fn("WS closed")
+    gone("closed")
+  end
 
   Log.tx("WS connect", Ws.ip, Ws.port, Ws.path())
   sock:Connect("wss", Ws.ip, Ws.path(), Ws.port)
+end
+
+-- Human-initiated pairing: drop any token and connect so the TV prompts.
+function Ws.pair()
+  Ws.token = ""
+  Ws.disconnect()
+  Timer.CallAfter(function() Ws.connect(true) end, 0.5) -- let the old socket close first
 end
 
 function Ws.disconnect()
